@@ -25,6 +25,8 @@ export const routes = {
   orgPage: (type: 'CLUB' | 'UNION' | 'INSTITUTION' | 'BRAND', slug: string) =>
     `/${{ CLUB: 'clubs', UNION: 'unions', INSTITUTION: 'colleges-universities', BRAND: 'brands' }[type]}/${slug}`,
   myOrganisation: '/dashboard/organisation',
+  subscription: '/dashboard/subscription',
+  billingSuccess: '/billing/success',
   myOffers: '/dashboard/offers',
   myApplications: '/dashboard/my-applications',
   applications: '/dashboard/applications',
