@@ -1,0 +1,1288 @@
+// Offload database schema. Designed in docs/architectural design/01-06; conventions in 01 design section 4:
+// UUIDv7 keys, createdAt/updatedAt/createdById/updatedById on every table (filled by the Prisma extension in
+// src/server/db.ts), Boolean fields named is.../has.... createdById and updatedById are plain ids, not foreign
+// keys: users are never removed as rows (they become tombstones), so they always point at a valid row.
+//
+// Things Prisma cannot express (partial and trigram indexes, check constraints, grants) are in the SQL files
+// in prisma/migrations/*/migration.sql.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────
+
+enum UserRole {
+  PLAYER
+  MANAGER
+  OFFLOAD_ADMIN
+  ADMINISTRATOR
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum DocumentStatus {
+  NONE
+  AWAITING_REVIEW
+  VERIFIED
+  REJECTED
+  REVOKED
+}
+
+enum RugbyCode {
+  LEAGUE_ONLY
+  UNION_ONLY
+  BOTH
+}
+
+enum AgeGroup {
+  U16
+  U18
+  U20
+  SENIOR
+  SEVENS
+}
+
+enum CountryKind {
+  ELIGIBLE
+  CAPPED
+}
+
+enum SkillKind {
+  SOFT
+  GAME
+}
+
+enum OrganisationType {
+  CLUB
+  UNION
+  INSTITUTION
+  BRAND
+}
+
+enum OrganisationStatus {
+  DRAFT
+  PENDING
+  PUBLISHED
+  REJECTED
+  UNPUBLISHED
+  BANNED
+}
+
+enum InstitutionKind {
+  COLLEGE
+  UNIVERSITY
+}
+
+enum MembershipStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  REMOVED
+}
+
+enum MembershipSource {
+  NEW_ORGANISATION
+  CLAIM
+}
+
+enum ChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+enum Weekday {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+enum OfferStatus {
+  DRAFT
+  PENDING
+  PUBLISHED
+  CLOSED
+  EXPIRED
+}
+
+enum PaidStatus {
+  PAID
+  UNPAID
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  SHORTLISTED
+  CONTACTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum PartyKind {
+  USER
+  ORGANISATION
+}
+
+enum VerificationSubject {
+  PLAYER
+  MANAGER
+  ORGANISATION
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+  SUPERSEDED
+}
+
+enum BillingInterval {
+  MONTH
+  YEAR
+}
+
+enum SubscriptionKind {
+  PAID
+  TRIAL
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  PAUSED
+  ENDED
+}
+
+enum EndedReason {
+  CANCELLED
+  NON_PAYMENT
+  TRIAL_ENDED
+  STAFF
+}
+
+enum PaymentStatus {
+  PAID
+  FAILED
+  OPEN
+  VOID
+}
+
+enum DiscountDuration {
+  ONCE
+  REPEATING
+  FOREVER
+}
+
+enum FilePurpose {
+  PROFILE_PICTURE
+  ORGANISATION_LOGO
+  COACH_IMAGE
+  IDENTITY_DOCUMENT
+  ORGANISATION_DOCUMENT
+  CV
+  EXPORT
+}
+
+enum FileStatus {
+  PENDING
+  READY
+  REJECTED
+}
+
+enum OutboxStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum ActorKind {
+  USER
+  SYSTEM
+}
+
+enum TokenType {
+  STAFF_INVITE
+}
+
+// ─── Identity (users, Better Auth tables, tokens) ───────────────────────
+
+model User {
+  id                      String         @id @default(uuid(7)) @db.Uuid
+  email                   String         @unique // lower case (GEN-2.2)
+  isEmailVerified         Boolean        @default(false) // Better Auth "emailVerified"
+  emailVerifiedAt         DateTime?
+  pendingEmail            String? // new address waiting for verification (ADM-1.5)
+  isEmailUndeliverable    Boolean        @default(false) // set by SMTP2GO bounce and complaint webhooks
+  name                    String? // Better Auth display name: first and last name
+  image                   String? // Better Auth core field; not used (profile pictures use profilePictureId)
+  role                    UserRole
+  previousRole            UserRole? // role before becoming staff (ADM-4.2)
+  status                  UserStatus     @default(ACTIVE)
+  firstName               String?
+  lastName                String?
+  dateOfBirth             DateTime?      @db.Date
+  nationalities           String[]       @db.Char(2) // ISO 3166-1 alpha-2, one or more
+  personalPhone           String?
+  bio                     String?        @db.VarChar(2000)
+  profilePictureId        String?        @db.Uuid
+  documentStatus          DocumentStatus @default(NONE)
+  documentDecidedAt       DateTime?
+  documentDecidedById     String?        @db.Uuid
+  termsVersion            String
+  termsAcceptedAt         DateTime
+  isNewsletterOptedIn     Boolean        @default(false)
+  failedLogins            Int            @default(0)
+  lockedUntil             DateTime?
+  unverifiedReminderStage Int            @default(0) // 0 none, 1 = 30-day notice sent, 2 = 7-day notice sent
+  lastSeenAt              DateTime?
+  legacyId                String?        @unique
+  legacyRegisteredAt      DateTime?
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+  createdById             String?        @db.Uuid
+  updatedById             String?        @db.Uuid
+
+  account        Account?
+  sessions       Session[]
+  playerProfile  PlayerProfile?
+  memberships    OrganisationMember[]
+  notifications  Notification[]
+  messagesSent   Message[]                @relation("MessageSender")
+  parties        ConversationParty[]
+  verifications  VerificationRequest[]    @relation("VerificationUser")
+  consents       CookieConsent[]
+  tokens         Token[]
+
+  @@index([role, status])
+  @@index([documentStatus])
+  @@index([createdAt])
+  @@index([nationalities], type: Gin)
+}
+
+// Better Auth: holds the password for email-and-password sign-in
+model Account {
+  id                    String    @id @default(uuid(7)) @db.Uuid
+  userId                String    @unique @db.Uuid
+  accountId             String // the user id, as Better Auth requires
+  providerId            String // always "credential" in the first release
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String? // Argon2id hash, or a wrapped WordPress hash
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  createdById           String?   @db.Uuid
+  updatedById           String?   @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  userId    String   @db.Uuid
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Better Auth: email verification and password reset tokens
+model Verification {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+// Staff invitations only (Better Auth handles the other tokens)
+model Token {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  type        TokenType
+  userId      String    @db.Uuid
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?   @db.Uuid
+  updatedById String?   @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CookieConsent {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  userId        String   @db.Uuid
+  categories    String[]
+  policyVersion String
+  createdAt     DateTime @default(now())
+  createdById   String?  @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+// ─── Shared services (files, notifications, outbox, limits, settings, audit) ─
+
+model File {
+  id           String      @id @default(uuid(7)) @db.Uuid
+  purpose      FilePurpose
+  status       FileStatus  @default(PENDING)
+  bucket       String
+  key          String // path of the stored object, built from ids only (never the user's file name)
+  mimeType     String
+  sizeBytes    Int
+  ownerId      String?     @db.Uuid
+  variants     String[] // WebP variants written by the worker, for example avatar, card, header
+  rejectReason String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  createdById  String?     @db.Uuid
+  updatedById  String?     @db.Uuid
+
+  verificationDocuments VerificationDocument[]
+
+  @@index([ownerId])
+  @@index([status, createdAt])
+}
+
+model Notification {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  userId      String    @db.Uuid
+  type        String
+  linkPath    String?
+  subjectName String? // name or title of the linked item
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+  createdById String?   @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model OutboxMessage {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  type          String
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  nextAttemptAt DateTime     @default(now())
+  lastError     String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  createdById   String?      @db.Uuid
+
+  @@index([status, nextAttemptAt])
+}
+
+model RateLimit {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+  updatedAt   DateTime @updatedAt
+
+  @@index([windowStart])
+}
+
+model Setting {
+  key         String   @id
+  value       Json
+  updatedAt   DateTime @updatedAt
+  updatedById String?  @db.Uuid
+}
+
+// Append-only: the application's database role can only INSERT and SELECT (ADM-12.4)
+model AuditEvent {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  actorKind      ActorKind
+  actorId        String?   @db.Uuid // USER: the user or staff member; null for SYSTEM
+  systemActor    String? // SYSTEM: which part acted, for example "job:offer-expiry"
+  actorRole      UserRole?
+  action         String
+  subjectType    String
+  subjectId      String
+  relatedUserIds String[]  @db.Uuid
+  relatedOrgId   String?   @db.Uuid
+  data           Json?
+  before         Json?
+  after          Json?
+  ip             String?
+  createdAt      DateTime  @default(now())
+
+  @@index([subjectType, subjectId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([relatedOrgId, createdAt])
+  @@index([action, createdAt])
+}
+
+// ─── Reference data (02, 03) ────────────────────────────────────────────
+
+model Country {
+  code String @id @db.Char(2)
+  name String
+}
+
+model Position {
+  id          String   @id
+  label       String
+  sortOrder   Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?  @db.Uuid
+  updatedById String?  @db.Uuid
+
+  asPrimary   PlayerProfile[] @relation("PrimaryPosition")
+  asSecondary PlayerProfile[] @relation("SecondaryPosition")
+  asOther     PlayerProfile[] @relation("OtherPosition")
+  offers      OfferPosition[]
+}
+
+model Skill {
+  id          String    @id
+  label       String
+  kind        SkillKind
+  sortOrder   Int
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?   @db.Uuid
+  updatedById String?   @db.Uuid
+
+  players PlayerSkill[]
+  offers  OfferSkill[]
+}
+
+model Qualification {
+  id          String   @id
+  label       String
+  sortOrder   Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?  @db.Uuid
+  updatedById String?  @db.Uuid
+
+  players PlayerQualification[]
+}
+
+model League {
+  id          String   @id
+  name        String
+  country     String?  @db.Char(2)
+  sortOrder   Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?  @db.Uuid
+  updatedById String?  @db.Uuid
+
+  organisations OrganisationLeague[]
+}
+
+model Industry {
+  id          String   @id
+  label       String
+  sortOrder   Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?  @db.Uuid
+  updatedById String?  @db.Uuid
+
+  organisations Organisation[]
+}
+
+// ─── Players (02) ───────────────────────────────────────────────────────
+
+model PlayerProfile {
+  id     String @id @default(uuid(7)) @db.Uuid
+  userId String @unique @db.Uuid
+
+  // Playing information
+  primaryPositionId      String?   @db.Text
+  secondaryPositionId    String?   @db.Text
+  otherPositionId        String?   @db.Text
+  heightCm               Int?
+  weightKg               Int?
+  currentClubId          String?   @db.Uuid
+  currentClubText        String?
+  currentUnionId         String?   @db.Uuid
+  currentUnionText       String?
+  currentInstitutionId   String?   @db.Uuid
+  currentInstitutionText String?
+  contractEndDate        DateTime? @db.Date
+  rugbyCode              RugbyCode?
+  highestQualification   String?
+  isKeenToRelocate       Boolean   @default(false)
+  isRetired              Boolean   @default(false)
+  isOpenToBrandPartnership Boolean @default(false)
+  strengths              String?   @db.VarChar(500)
+  workOns                String?   @db.VarChar(500)
+  colourPersonality      String?
+
+  // Eligibility and caps
+  isCapped  Boolean   @default(false)
+  firstCap  DateTime? @db.Date
+  lastCap   DateTime? @db.Date
+  totalCaps Int?
+
+  // Strength and conditioning
+  maxSpeedMs  Decimal? @db.Decimal(5, 2)
+  broadJumpCm Decimal? @db.Decimal(6, 1)
+  test1200Sec Decimal? @db.Decimal(6, 1)
+  cmjCm       Decimal? @db.Decimal(5, 1)
+  bench1rmKg  Decimal? @db.Decimal(5, 1)
+  squat1rmKg  Decimal? @db.Decimal(5, 1)
+
+  // Academic
+  hasAcademicInterest Boolean @default(false)
+  isGraduated         Boolean @default(false)
+
+  // Videos and documents
+  highlightVideoUrl String?
+  cvFileId          String? @db.Uuid
+
+  // Social links, stored as canonical URLs
+  instagramUrl String?
+  youtubeUrl   String?
+  linkedinUrl  String?
+  facebookUrl  String?
+  xUrl         String?
+
+  // Directory
+  listedAt DateTime? // set when the player becomes verified; null while not verified
+  isHidden Boolean   @default(false) // reserved for a later "hide me" option (PLR-10.1)
+
+  legacyId    String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?  @db.Uuid
+  updatedById String?  @db.Uuid
+
+  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  primaryPosition    Position?     @relation("PrimaryPosition", fields: [primaryPositionId], references: [id])
+  secondaryPosition  Position?     @relation("SecondaryPosition", fields: [secondaryPositionId], references: [id])
+  otherPosition      Position?     @relation("OtherPosition", fields: [otherPositionId], references: [id])
+  currentClub        Organisation? @relation("PlayerCurrentClub", fields: [currentClubId], references: [id])
+  currentUnion       Organisation? @relation("PlayerCurrentUnion", fields: [currentUnionId], references: [id])
+  currentInstitution Organisation? @relation("PlayerCurrentInstitution", fields: [currentInstitutionId], references: [id])
+
+  countries      PlayerCountry[]
+  ageGroups      PlayerAgeGroup[]
+  qualifications PlayerQualification[]
+  skills         PlayerSkill[]
+  clubHistory    ClubHistory[]
+  achievements   Achievement[]
+  featuredVideos FeaturedVideo[]
+  applications   Application[]
+
+  @@index([listedAt(sort: Desc), id])
+  @@index([primaryPositionId])
+  @@index([secondaryPositionId])
+  @@index([otherPositionId])
+  @@index([heightCm])
+  @@index([weightKg])
+  @@index([contractEndDate])
+  @@index([rugbyCode])
+  @@index([currentClubId])
+  @@index([currentUnionId])
+  @@index([currentInstitutionId])
+}
+
+model PlayerCountry {
+  playerId String      @db.Uuid
+  country  String      @db.Char(2)
+  kind     CountryKind
+
+  player PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@id([playerId, country, kind])
+  @@index([country, kind])
+}
+
+model PlayerAgeGroup {
+  playerId String   @db.Uuid
+  ageGroup AgeGroup
+
+  player PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@id([playerId, ageGroup])
+}
+
+model PlayerQualification {
+  playerId        String @db.Uuid
+  qualificationId String
+
+  player        PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  qualification Qualification @relation(fields: [qualificationId], references: [id])
+
+  @@id([playerId, qualificationId])
+  @@index([qualificationId])
+}
+
+model PlayerSkill {
+  playerId String @db.Uuid
+  skillId  String
+
+  player PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  skill  Skill         @relation(fields: [skillId], references: [id])
+
+  @@id([playerId, skillId])
+  @@index([skillId])
+}
+
+model ClubHistory {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  playerId    String    @db.Uuid
+  clubName    String
+  startDate   DateTime? @db.Date
+  endDate     DateTime? @db.Date
+  coaches     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String?   @db.Uuid
+  updatedById String?   @db.Uuid
+
+  player PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId])
+}
+
+model Achievement {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  playerId    String   @db.Uuid
+  title       String   @db.VarChar(150)
+  year        Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?  @db.Uuid
+  updatedById String?  @db.Uuid
+
+  player PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId])
+}
+
+model FeaturedVideo {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  playerId      String   @db.Uuid
+  youtubeUrl    String
+  howToIdentify String?
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdById   String?  @db.Uuid
+  updatedById   String?  @db.Uuid
+
+  player PlayerProfile @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId])
+}
+
+// ─── Organisations (03) ─────────────────────────────────────────────────
+
+model Organisation {
+  id          String             @id @default(uuid(7)) @db.Uuid
+  type        OrganisationType
+  status      OrganisationStatus @default(PENDING)
+  slug        String             @unique // public URL: /clubs/{slug}
+  name        String
+  description String? // formatted text: bold, italic, lists and links only, cleaned on save
+  logoFileId  String?            @db.Uuid
+
+  officialEmail String?
+  officialPhone String? // E.164
+  website       String?
+  foundedYear   Int?
+
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  region       String?
+  postcode     String?
+  country      String? @db.Char(2)
+  mapAddress   String? // one-line address shown with the map
+  placeId      String? // Google place id of the chosen address; null = no map
+
+  facebookUrl  String?
+  linkedinUrl  String?
+  instagramUrl String?
+  xUrl         String?
+  youtubeUrl   String?
+
+  // Type-specific
+  registrationNumber    String? // clubs, unions, colleges/universities
+  trainingGround        String?
+  trainingGroundPlaceId String?
+  playingGround         String?
+  playingGroundPlaceId  String?
+  previousResults       String?
+  level                 String? // clubs and unions
+  institutionKind       InstitutionKind? // colleges/universities
+  industryId            String? // brands
+  industryOther         String?          @db.VarChar(60) // brands, when the industry is "other"
+
+  documentFileId    String?   @db.Uuid // private File
+  publishedAt       DateTime?
+  statusReason      String? // reason for Rejected or Unpublished
+  statusChangedById String?   @db.Uuid
+  deletedAt         DateTime? // tombstone
+  legacyId          String?   @unique
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdById       String?   @db.Uuid
+  updatedById       String?   @db.Uuid
+
+  industry Industry? @relation(fields: [industryId], references: [id])
+
+  members          OrganisationMember[]
+  coaches          Coach[]
+  seasons          Season[]
+  trainingSessions TrainingSession[]
+  leagues          OrganisationLeague[]
+  pathways         ClubPathway[]               @relation("ClubPathwayOwner")
+  changeRequests   OrganisationChangeRequest[]
+  offers           Offer[]
+  subscriptions    Subscription[]
+  billingAccount   BillingAccount?
+  parties          ConversationParty[]
+  verifications    VerificationRequest[]       @relation("VerificationOrganisation")
+  playersAtClub        PlayerProfile[] @relation("PlayerCurrentClub")
+  playersAtUnion       PlayerProfile[] @relation("PlayerCurrentUnion")
+  playersAtInstitution PlayerProfile[] @relation("PlayerCurrentInstitution")
+  pathwayLinks         ClubPathway[]   @relation("PathwayInstitution")
+
+  @@index([type, status, name])
+  @@index([type, status, country])
+  @@index([industryId])
+}
+
+model OrganisationSlugRedirect {
+  oldSlug        String   @id
+  organisationId String   @db.Uuid
+  createdAt      DateTime @default(now())
+
+  @@index([organisationId])
+}
+
+model OrganisationMember {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  userId         String           @db.Uuid
+  organisationId String           @db.Uuid
+  status         MembershipStatus @default(PENDING)
+  source         MembershipSource
+  decidedById    String?          @db.Uuid
+  decidedAt      DateTime?
+  reason         String?
+  legacyId       String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  createdById    String?          @db.Uuid
+  updatedById    String?          @db.Uuid
+
+  user         User         @relation(fields: [userId], references: [id])
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@index([organisationId, status])
+  @@index([userId, status])
+}
+
+model Coach {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organisationId String    @db.Uuid
+  name           String
+  photoFileId    String?   @db.Uuid
+  jobRole        String
+  startDate      DateTime  @db.Date
+  endDate        DateTime? @db.Date
+  sortOrder      Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdById    String?   @db.Uuid
+  updatedById    String?   @db.Uuid
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+}
+
+model Season {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organisationId String   @db.Uuid
+  label          String
+  startDate      DateTime @db.Date
+  endDate        DateTime @db.Date
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdById    String?  @db.Uuid
+  updatedById    String?  @db.Uuid
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+}
+
+model TrainingSession {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organisationId String   @db.Uuid
+  day            Weekday
+  startTime      String // "HH:mm"
+  endTime        String // "HH:mm"
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdById    String?  @db.Uuid
+  updatedById    String?  @db.Uuid
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+}
+
+model OrganisationLeague {
+  organisationId String @db.Uuid
+  leagueId       String
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  league       League       @relation(fields: [leagueId], references: [id])
+
+  @@id([organisationId, leagueId])
+  @@index([leagueId])
+}
+
+// A club's partner college/university: a link when it is on the platform, free text when not (ORG-1.9)
+model ClubPathway {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  organisationId  String   @db.Uuid
+  institutionId   String?  @db.Uuid
+  institutionText String?
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  createdById     String?  @db.Uuid
+  updatedById     String?  @db.Uuid
+
+  organisation Organisation  @relation("ClubPathwayOwner", fields: [organisationId], references: [id], onDelete: Cascade)
+  institution  Organisation? @relation("PathwayInstitution", fields: [institutionId], references: [id])
+
+  @@index([organisationId])
+}
+
+model OrganisationChangeRequest {
+  id             String              @id @default(uuid(7)) @db.Uuid
+  organisationId String              @db.Uuid
+  requestedById  String              @db.Uuid
+  changes        Json // only: name, country, registrationNumber, documentFileId
+  status         ChangeRequestStatus @default(PENDING)
+  reason         String?
+  decidedById    String?             @db.Uuid
+  decidedAt      DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  createdById    String?             @db.Uuid
+  updatedById    String?             @db.Uuid
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, status])
+  @@index([status, createdAt])
+}
+
+// ─── Verification (05) ──────────────────────────────────────────────────
+
+model VerificationRequest {
+  id                    String              @id @default(uuid(7)) @db.Uuid
+  subject               VerificationSubject
+  userId                String?             @db.Uuid // PLAYER, MANAGER
+  organisationId        String?             @db.Uuid // ORGANISATION; for MANAGER, the organisation registered or claimed
+  membershipId          String?             @db.Uuid // MANAGER: the membership this approval activates
+  isClaim               Boolean             @default(false) // MANAGER: chose an existing organisation
+  status                VerificationStatus  @default(PENDING)
+  submittedAt           DateTime            @default(now())
+  decidedAt             DateTime?
+  decidedById           String?             @db.Uuid
+  reason                String?
+  possibleDuplicateOfId String?             @db.Uuid // ORGANISATION only
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  createdById           String?             @db.Uuid
+  updatedById           String?             @db.Uuid
+
+  user         User?        @relation("VerificationUser", fields: [userId], references: [id])
+  organisation Organisation? @relation("VerificationOrganisation", fields: [organisationId], references: [id])
+  documents    VerificationDocument[]
+
+  @@index([subject, status, submittedAt])
+  @@index([userId, status])
+  @@index([organisationId, status])
+}
+
+model VerificationDocument {
+  requestId String @db.Uuid
+  fileId    String @db.Uuid
+
+  request VerificationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  file    File                @relation(fields: [fileId], references: [id])
+
+  @@id([requestId, fileId])
+}
+
+// ─── Offers and applications (04) ───────────────────────────────────────
+
+model Offer {
+  id                   String       @id @default(uuid(7)) @db.Uuid
+  organisationId       String       @db.Uuid
+  offeredBy            OrganisationType // copied from the organisation at creation
+  title                String?      @db.VarChar(150) // required to publish; may be empty in a draft
+  description          String? // formatted text; required to publish
+  paid                 PaidStatus? // required to publish
+  locationText         String? // one-line address; defaults to the organisation's address
+  locationPlaceId      String? // Google place id
+  status               OfferStatus  @default(DRAFT)
+  publishedAt          DateTime? // set when published
+  expiresAt            DateTime? // publishedAt + 30 days, never changed
+  expiryReminderSentAt DateTime?
+  closedAt             DateTime?
+  closedByStaffId      String?      @db.Uuid // set when staff close it for breaking the terms
+  closedReason         String?
+  copiedFromId         String?      @db.Uuid
+  legacyId             String?      @unique
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  createdById          String?      @db.Uuid
+  updatedById          String?      @db.Uuid
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  positions    OfferPosition[]
+  skills       OfferSkill[]
+  applications Application[]
+
+  @@index([status, expiresAt])
+  @@index([organisationId, status, expiresAt])
+  @@index([offeredBy, status])
+  @@index([publishedAt(sort: Desc), id])
+}
+
+model OfferPosition {
+  offerId    String @db.Uuid
+  positionId String
+
+  offer    Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  position Position @relation(fields: [positionId], references: [id])
+
+  @@id([offerId, positionId])
+  @@index([positionId])
+}
+
+model OfferSkill {
+  offerId String @db.Uuid
+  skillId String
+
+  offer Offer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id])
+
+  @@id([offerId, skillId])
+  @@index([skillId])
+}
+
+model Application {
+  id                String            @id @default(uuid(7)) @db.Uuid
+  offerId           String            @db.Uuid
+  playerId          String            @db.Uuid // PlayerProfile
+  organisationId    String            @db.Uuid // copied from the offer, for fast manager queries
+  note              String?           @db.VarChar(2000)
+  status            ApplicationStatus @default(SUBMITTED)
+  statusChangedAt   DateTime?
+  statusChangedById String?           @db.Uuid
+  resubmittedAt     DateTime?
+  legacyId          String?           @unique
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  createdById       String?           @db.Uuid
+  updatedById       String?           @db.Uuid
+
+  offer  Offer         @relation(fields: [offerId], references: [id])
+  player PlayerProfile @relation(fields: [playerId], references: [id])
+
+  @@unique([offerId, playerId])
+  @@index([organisationId, createdAt])
+  @@index([playerId, createdAt])
+}
+
+// ─── Messaging (04) ─────────────────────────────────────────────────────
+
+model Conversation {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  pairKey       String   @unique // sorted "U:{id}" / "O:{id}" keys of both parties
+  lastMessageAt DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdById   String?  @db.Uuid
+  updatedById   String?  @db.Uuid
+
+  parties  ConversationParty[]
+  messages Message[]
+
+  @@index([lastMessageAt])
+}
+
+model ConversationParty {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  conversationId String    @db.Uuid
+  kind           PartyKind
+  userId         String?   @db.Uuid
+  organisationId String?   @db.Uuid
+  lastReadAt     DateTime? // read state per party, shared by all managers of an organisation
+  unreadCount    Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdById    String?   @db.Uuid
+  updatedById    String?   @db.Uuid
+
+  conversation Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id])
+  organisation Organisation? @relation(fields: [organisationId], references: [id])
+
+  @@index([userId])
+  @@index([organisationId])
+  @@index([conversationId])
+}
+
+// Append-only: the application's database role has no UPDATE or DELETE on this table (MSG-1.16)
+model Message {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  conversationId String   @db.Uuid
+  senderUserId   String   @db.Uuid // the person who wrote it
+  senderOrgId    String?  @db.Uuid // set when a manager writes from the organisation inbox
+  body           String   @db.VarChar(2000)
+  legacyId       String?  @unique
+  createdAt      DateTime @default(now())
+  createdById    String?  @db.Uuid
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  sender       User         @relation("MessageSender", fields: [senderUserId], references: [id])
+
+  @@index([conversationId, createdAt])
+}
+
+// ─── Billing (06) ───────────────────────────────────────────────────────
+
+model Plan {
+  id               String           @id @default(uuid(7)) @db.Uuid
+  key              String           @unique // for example club_monthly
+  name             String
+  organisationType OrganisationType
+  interval         BillingInterval
+  stripeProductId  String           @unique
+  currentPriceId   String?          @unique @db.Uuid // PlanPrice.id of the price new buyers get
+  isActive         Boolean          @default(true)
+  sortOrder        Int
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  createdById      String?          @db.Uuid
+  updatedById      String?          @db.Uuid
+
+  prices        PlanPrice[]
+  subscriptions Subscription[]
+  discountCodes DiscountCodePlan[]
+}
+
+model PlanPrice {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  planId        String   @db.Uuid
+  stripePriceId String   @unique
+  amountPence   Int // GBP only
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  createdById   String?  @db.Uuid
+  updatedById   String?  @db.Uuid
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@index([planId])
+}
+
+model BillingAccount {
+  organisationId   String   @id @db.Uuid
+  stripeCustomerId String   @unique
+  billingName      String?
+  company          String?
+  email            String?
+  phone            String?
+  address          Json? // line1, line2, city, postcode, country
+  cardBrand        String? // brand and last 4 digits only (SUB-7.1)
+  cardLast4        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  createdById      String?  @db.Uuid
+  updatedById      String?  @db.Uuid
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+}
+
+model Subscription {
+  id                     String             @id @default(uuid(7)) @db.Uuid
+  organisationId         String             @db.Uuid
+  kind                   SubscriptionKind
+  status                 SubscriptionStatus
+  planId                 String             @db.Uuid
+  planPriceId            String?            @db.Uuid // PAID only: the price this subscriber pays
+  stripeSubscriptionId   String?            @unique
+  purchasedById          String?            @db.Uuid // manager who bought it, or staff who gave the trial
+  startedAt              DateTime
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime? // next renewal date, or trial end
+  isCancelledAtPeriodEnd Boolean            @default(false)
+  scheduledPlanId        String?            @db.Uuid // plan switch waiting for the next period
+  stripeScheduleId       String?
+  discountCodeId         String?            @db.Uuid
+  pastDueSince           DateTime?
+  pausedAt               DateTime?
+  pausedRemainingSeconds Int?
+  accessEndedAt          DateTime? // when access stopped; start of the subscribe-again reminders
+  endedReason            EndedReason?
+  legacyId               String?            @unique // WooCommerce subscription id
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  createdById            String?            @db.Uuid
+  updatedById            String?            @db.Uuid
+
+  organisation Organisation  @relation(fields: [organisationId], references: [id])
+  plan         Plan          @relation(fields: [planId], references: [id])
+  discountCode DiscountCode? @relation(fields: [discountCodeId], references: [id])
+  payments     Payment[]
+
+  @@index([organisationId, status])
+  @@index([status, currentPeriodEnd])
+}
+
+model Payment {
+  id                  String        @id @default(uuid(7)) @db.Uuid
+  organisationId      String        @db.Uuid
+  subscriptionId      String        @db.Uuid
+  stripeInvoiceId     String?       @unique // null only for payments imported from WordPress
+  invoiceNumber       String?
+  legacyId            String?       @unique // WooCommerce order id
+  status              PaymentStatus
+  amountPence         Int // charged after discount
+  discountPence       Int           @default(0)
+  amountRefundedPence Int           @default(0)
+  failedAttempts      Int           @default(0)
+  lastFailureMessage  String?
+  periodStart         DateTime
+  periodEnd           DateTime
+  paidAt              DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  createdById         String?       @db.Uuid
+  updatedById         String?       @db.Uuid
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  refunds      Refund[]
+
+  @@index([organisationId, createdAt])
+  @@index([subscriptionId])
+}
+
+model Refund {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  paymentId      String   @db.Uuid
+  stripeRefundId String?  @unique // null only for refunds imported from WordPress
+  legacyId       String?  @unique
+  amountPence    Int
+  reason         String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdById    String?  @db.Uuid
+  updatedById    String?  @db.Uuid
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+}
+
+model DiscountCode {
+  id                    String           @id @default(uuid(7)) @db.Uuid
+  code                  String // stored upper-case
+  percentOff            Int // 1 to 100
+  duration              DiscountDuration
+  durationMonths        Int?
+  expiresAt             DateTime?
+  maxRedemptions        Int?
+  timesRedeemed         Int              @default(0)
+  stripeCouponId        String
+  stripePromotionCodeId String           @unique
+  isActive              Boolean          @default(true)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  createdById           String?          @db.Uuid
+  updatedById           String?          @db.Uuid
+
+  plans         DiscountCodePlan[]
+  subscriptions Subscription[]
+}
+
+model DiscountCodePlan {
+  discountCodeId String @db.Uuid
+  planId         String @db.Uuid
+
+  discountCode DiscountCode @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
+  plan         Plan         @relation(fields: [planId], references: [id])
+
+  @@id([discountCodeId, planId])
+}
+
+// Append-only: createdAt = when the event was received
+model WebhookEvent {
+  id          String    @id // Stripe event id
+  type        String
+  processedAt DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+  createdById String?   @db.Uuid
+}
+
+// Append-only: createdAt = when the reminder was sent
+model BillingReminder {
+  subscriptionId String   @db.Uuid
+  kind           String // TRIAL_7, TRIAL_1, RENEWAL_14, RENEWAL_7, RENEWAL_1, AGAIN_1, AGAIN_2, AGAIN_7, AGAIN_30, AGAIN_180
+  createdAt      DateTime @default(now())
+  createdById    String?  @db.Uuid
+
+  @@id([subscriptionId, kind])
+}

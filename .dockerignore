@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.github
+.kiro
+.vscode
+.env*
+!.env.example
+.local-storage
+wp-db-export
+scripts/migration
+docs
+dist
+coverage
+playwright-report
+test-results
+*.md

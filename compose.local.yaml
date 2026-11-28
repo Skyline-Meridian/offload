@@ -1,0 +1,28 @@
+# Local development. The database is published on 127.0.0.1:5433 so `npm run dev` on your machine can reach it.
+# `web`, `realtime` and `worker` are normally run with npm scripts; start them as containers only to check the
+# production set-up: docker compose --env-file .env.local -f compose.yaml -f compose.local.yaml up --build
+services:
+  db:
+    ports:
+      - '127.0.0.1:5433:5432'
+
+  web:
+    env_file: [.env.local]
+    environment:
+      DATABASE_URL: postgresql://offload_app:${DB_APP_PASSWORD}@db:5432/offload
+    ports:
+      - '127.0.0.1:3000:3000'
+
+  realtime:
+    env_file: [.env.local]
+    environment:
+      DATABASE_URL_REALTIME: postgresql://offload_realtime:${DB_REALTIME_PASSWORD}@db:5432/offload
+    ports:
+      - '127.0.0.1:3001:3001'
+
+  worker:
+    env_file: [.env.local]
+    environment:
+      DATABASE_URL: postgresql://offload_app:${DB_APP_PASSWORD}@db:5432/offload
+      DATABASE_URL_RETENTION: postgresql://offload_retention:${DB_RETENTION_PASSWORD}@db:5432/offload
+      WEB_URL: http://web:3000
