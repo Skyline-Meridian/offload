@@ -1,0 +1,86 @@
+{
+  "extends": [
+    "stylelint-config-standard-scss"
+  ],
+  "plugins": [
+    "stylelint-declaration-strict-value"
+  ],
+  "rules": {
+    "selector-class-pattern": null,
+    "at-rule-no-unknown": null,
+    "scss/at-rule-no-unknown": [
+      true,
+      {
+        "ignoreAtRules": [
+          "theme",
+          "utility",
+          "source",
+          "plugin",
+          "custom-variant",
+          "variant",
+          "apply",
+          "config",
+          "reference"
+        ]
+      }
+    ],
+    "import-notation": null,
+    "comment-empty-line-before": null,
+    "custom-property-empty-line-before": null,
+    "no-invalid-position-declaration": null,
+    "nesting-selector-no-missing-scoping-root": [
+      true,
+      {
+        "ignoreAtRules": [
+          "utility"
+        ]
+      }
+    ],
+    "custom-property-pattern": null,
+    "scss/dollar-variable-pattern": null,
+    "function-disallowed-list": [
+      "rgb",
+      "rgba",
+      "hsl",
+      "hsla",
+      "hwb",
+      "lab",
+      "lch",
+      "oklab",
+      "oklch",
+      "color-mix"
+    ],
+    "scale-unlimited/declaration-strict-value": [
+      [
+        "/color$/",
+        "fill",
+        "stroke",
+        "font-family",
+        "font-size",
+        "font-weight",
+        "line-height",
+        "letter-spacing",
+        "/^padding/",
+        "/^margin/",
+        "gap",
+        "row-gap",
+        "column-gap",
+        "/radius$/",
+        "box-shadow",
+        "z-index",
+        "/^border(-(top|right|bottom|left))?-width$/",
+        "transition-duration",
+        "animation-duration"
+      ],
+      {
+        "ignoreFunctions": true,
+        "ignoreVariables": true,
+        "ignoreValues": [
+          "/^(0|auto|inherit|initial|unset|none|transparent|currentcolor|normal|revert)$/i"
+        ],
+        "expandShorthand": true,
+        "message": "Use a design token (var(--...)) instead of \"${value}\" for \"${property}\". Add the token to globals.css if it is missing."
+      }
+    ]
+  }
+}

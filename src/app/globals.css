@@ -1,0 +1,362 @@
+@import "tailwindcss";
+
+@theme {
+  --color-*: initial;
+  --spacing-*: initial;
+  --spacing: initial;
+  --text-*: initial;
+  --font-*: initial;
+  --font-weight-*: initial;
+  --leading-*: initial;
+  --tracking-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --breakpoint-*: initial;
+  --container-*: initial;
+
+  /* Colours (WordPress global colour names in the comments) */
+  --color-heading: #2b2a29;
+  --color-text: #5b5f64;
+  --color-text-light: #959fa8;
+  --color-accent: #da6a2a;
+  --color-accent-hover: #a74811;
+  --color-secondary: #287fb8;
+  --color-secondary-hover: #135c8d;
+  --color-border: #e2e6e8;
+  --color-surface: #f3f4f7;
+  --color-white: #fff;
+  --color-focus: #287fb8;
+  /* Status colours: not in WordPress, chosen to fit the palette and pass 4.5:1 contrast on white */
+  --color-success: #2f855a;
+  --color-success-surface: #e8f5ee;
+  --color-warning: #975a16;
+  --color-warning-surface: #fdf3e1;
+  --color-error: #c53030;
+  --color-error-surface: #fceaea;
+  --color-overlay: #2b2a2999;
+
+  /* Font families (next/font variables) */
+  --font-display: var(--font-barlow-semi-condensed);
+  --font-heading: var(--font-barlow-condensed);
+  --font-body: var(--font-urbanist);
+  --font-accent: var(--font-barlow);
+
+  /* Font sizes */
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.5rem;
+  --text-5xl: 3rem;
+  --text-6xl: 3.125rem;
+  --text-7xl: 5rem;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --leading-none: 1;
+  --leading-heading: 1.3;
+  --leading-body: 1.86;
+  --tracking-display: -0.019rem;
+  --tracking-tight: -0.031rem;
+  --tracking-normal: 0;
+  --tracking-wide: 0.0625rem;
+
+  /* Spacing: padding, margin, gap */
+  --spacing-2xs: 0.3125rem;
+  --spacing-xs: 0.625rem;
+  --spacing-sm: 0.9375rem;
+  --spacing-md: 1.25rem;
+  --spacing-lg: 1.875rem;
+  --spacing-xl: 2.5rem;
+  --spacing-2xl: 3.125rem;
+  --spacing-3xl: 3.75rem;
+  --spacing-4xl: 6.25rem;
+
+  /* Sizes (icons, avatars, controls) */
+  --size-icon-sm: 1rem;
+  --size-icon-md: 1.25rem;
+  --size-icon-lg: 1.5rem;
+  --size-avatar-sm: 2rem;
+  --size-avatar-md: 3rem;
+  --size-avatar-lg: 6rem;
+  --size-control: 3rem;
+
+  --container-content: 87.5rem;
+  --container-narrow: 40rem;
+  --container-form: 30rem;
+  --container-menu: 14rem;
+
+  /* Shape */
+  --radius-none: 0;
+  --radius-pill: 1.25rem;
+  --radius-full: 9999px;
+
+  /* Shadows (menus and dialogs only) */
+  --shadow-overlay: 0 0.5rem 1.5rem #2b2a2926;
+
+  /* Breakpoints (Elementor) */
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1025px;
+
+  /* Motion */
+  --ease-standard: ease;
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+}
+
+:root {
+  --border-width: 1px;
+  --border-width-strong: 2px;
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-overlay: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+}
+
+/* Text styles: the only way text is styled (implementation doc 17.3) */
+@utility text-h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-5xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-none);
+  letter-spacing: var(--tracking-display);
+  color: var(--color-heading);
+
+  @media (width >= theme(--breakpoint-md)) {
+    font-size: var(--text-7xl);
+  }
+}
+
+@utility text-h2 {
+  font-family: var(--font-heading);
+  font-size: var(--text-3xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-display);
+  color: var(--color-heading);
+
+  @media (width >= theme(--breakpoint-md)) {
+    font-size: var(--text-6xl);
+  }
+}
+
+@utility text-subtitle {
+  font-family: var(--font-display);
+  font-size: var(--text-4xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-heading);
+}
+
+@utility text-h3 {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-normal);
+  color: var(--color-heading);
+
+  @media (width >= theme(--breakpoint-md)) {
+    font-size: var(--text-3xl);
+  }
+}
+
+@utility text-h4 {
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-normal);
+  color: var(--color-heading);
+
+  @media (width >= theme(--breakpoint-md)) {
+    font-size: var(--text-2xl);
+  }
+}
+
+@utility text-h5 {
+  font-family: var(--font-body);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-normal);
+  color: var(--color-heading);
+}
+
+@utility text-eyebrow {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+@utility text-body {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-normal);
+  color: var(--color-text);
+}
+
+@utility text-link {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-normal);
+  color: var(--color-secondary);
+
+  &:hover {
+    color: var(--color-secondary-hover);
+    text-decoration: underline;
+  }
+}
+
+@utility text-accent {
+  font-family: var(--font-accent);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+@utility text-button {
+  font-family: var(--font-heading);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-tight);
+  text-transform: uppercase;
+}
+
+@utility text-label {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-normal);
+  color: var(--color-heading);
+}
+
+@utility text-hint {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--leading-body);
+  letter-spacing: var(--tracking-normal);
+  color: var(--color-text-light);
+}
+
+/* Borders and motion from tokens */
+@utility border-thin {
+  border-style: solid;
+  border-width: var(--border-width);
+}
+
+@utility border-strong {
+  border-style: solid;
+  border-width: var(--border-width-strong);
+}
+
+@utility transition-fast {
+  transition: color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+@utility top-0 {
+  top: 0;
+}
+
+@utility inset-x-0 {
+  right: 0;
+  left: 0;
+}
+
+@utility size-0 {
+  width: 0;
+  height: 0;
+}
+
+@utility z-dropdown {
+  z-index: var(--z-dropdown);
+}
+
+@utility z-sticky {
+  z-index: var(--z-sticky);
+}
+
+@utility z-overlay {
+  z-index: var(--z-overlay);
+}
+
+@utility z-modal {
+  z-index: var(--z-modal);
+}
+
+@utility z-toast {
+  z-index: var(--z-toast);
+}
+
+/* Base element styles, so content from the rich text editor matches the text styles */
+@layer base {
+  html {
+    background: var(--color-white);
+  }
+
+  body {
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    line-height: var(--leading-body);
+    color: var(--color-text);
+    background: var(--color-white);
+  }
+
+  h1 { @apply text-h1; }
+  h2 { @apply text-h2; }
+  h3 { @apply text-h3; }
+  h4 { @apply text-h4; }
+  h5 { @apply text-h5; }
+  h6 { @apply text-eyebrow; }
+
+  a {
+    color: var(--color-secondary);
+  }
+
+  a:hover {
+    color: var(--color-secondary-hover);
+  }
+
+  :focus-visible {
+    outline: var(--border-width-strong) solid var(--color-focus);
+    outline-offset: var(--spacing-2xs);
+  }
+}
+
+/* Rich text written by users (organisation descriptions) */
+@utility rich-text {
+  & p,
+  & ul,
+  & ol {
+    margin-block: var(--spacing-xs);
+  }
+
+  & ul {
+    list-style: disc;
+    padding-inline-start: var(--spacing-md);
+  }
+
+  & ol {
+    list-style: decimal;
+    padding-inline-start: var(--spacing-md);
+  }
+}
