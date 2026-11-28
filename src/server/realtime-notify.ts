@@ -11,5 +11,6 @@ export type RealtimeEvent =
 
 /** Publishes inside the caller's transaction, so listeners hear about it only after commit. */
 export async function notifyRealtime(tx: Tx, event: RealtimeEvent): Promise<void> {
-  await tx.$queryRaw`SELECT pg_notify('realtime', ${JSON.stringify(event)})`
+  // pg_notify returns void, which the client cannot read back, so it runs as a statement.
+  await tx.$executeRaw`SELECT pg_notify('realtime', ${JSON.stringify(event)})`
 }
