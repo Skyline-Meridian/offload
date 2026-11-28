@@ -10,6 +10,8 @@ import { OrganisationView } from '@/components/organisations/organisation-view'
 import type { OrgTypeKey } from '@/lib/constants'
 import { messages } from '@/lib/messages'
 import { routes } from '@/lib/routes'
+import { OfferCard } from '@/components/offers/offer-card'
+import { listOpenOffersForOrganisation } from '@/server/dal/offers'
 import { findSlugRedirect, getPublicOrganisation, listPlayersAtOrganisation } from '@/server/dal/organisations'
 import { getViewer } from '@/server/dal/viewer'
 import { db } from '@/server/db'
@@ -21,6 +23,28 @@ async function getCachedOrganisation(type: OrgTypeKey, slug: string) {
   if (org) cacheTag(`org:${org.id}`)
   cacheLife('hours')
   return org
+}
+
+async function getCachedOpenOffers(organisationId: string) {
+  'use cache'
+  cacheTag(`org-offers:${organisationId}`)
+  cacheLife('minutes')
+  return listOpenOffersForOrganisation(organisationId)
+}
+
+async function OffersSection({ organisationId }: { organisationId: string }): Promise<React.JSX.Element | null> {
+  const offers = await getCachedOpenOffers(organisationId)
+  if (offers.length === 0) return null
+  return (
+    <section className="flex flex-col gap-xs">
+      <h2 className="text-h3">Open offers</h2>
+      <ul className="grid gap-md md:grid-cols-2">
+        {offers.map((o) => (
+          <OfferCard key={o.id} offer={o} />
+        ))}
+      </ul>
+    </section>
+  )
 }
 
 async function getCachedCountryNames(): Promise<Record<string, string>> {
@@ -101,6 +125,11 @@ export async function OrganisationPublicPage({ type, params }: { type: OrgTypeKe
           actions={
             <Suspense fallback={null}>
               <ViewerActions organisationId={org.id} />
+            </Suspense>
+          }
+          offers={
+            <Suspense fallback={null}>
+              <OffersSection organisationId={org.id} />
             </Suspense>
           }
           players={
