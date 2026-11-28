@@ -16,11 +16,18 @@ export default async function RegisterPage({
 }): Promise<React.JSX.Element> {
   const params = await searchParams
   if (await getViewer()) redirect(routes.dashboard)
-  const countries = await db.country.findMany({ orderBy: { name: 'asc' }, select: { code: true, name: true } })
+  const [countries, industries] = await Promise.all([
+    db.country.findMany({ orderBy: { name: 'asc' }, select: { code: true, name: true } }),
+    db.industry.findMany({ where: { isActive: true }, orderBy: { sortOrder: 'asc' }, select: { id: true, label: true } }),
+  ])
   const defaultRole = typeof params.as === 'string' ? params.as.toUpperCase() : undefined
   return (
     <AuthPage title="Create an account">
-      <RegisterForm countries={countries.map((c) => ({ value: c.code, label: c.name }))} defaultRole={defaultRole} />
+      <RegisterForm
+        countries={countries.map((c) => ({ value: c.code, label: c.name }))}
+        industries={industries.map((i) => ({ value: i.id, label: i.label }))}
+        defaultRole={defaultRole}
+      />
     </AuthPage>
   )
 }

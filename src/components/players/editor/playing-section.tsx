@@ -1,6 +1,9 @@
 'use client'
 
+import { useState } from 'react'
+
 import { savePlaying } from '@/actions/player'
+import { OrganisationPicker } from '@/components/forms/organisation-picker'
 import { FormMessage } from '@/components/forms/form-message'
 import { SubmitButton } from '@/components/forms/submit-button'
 import { SectionCard } from '@/components/players/editor/section-card'
@@ -26,17 +29,21 @@ type LinkedProps = {
   errors?: string[]
 }
 
-/** An organisation is either linked (shown by name, kept as it is) or typed as text. */
-function OrganisationText({ idName, textName, label, id, text, name, errors }: LinkedProps): React.JSX.Element {
+/** Pick an organisation on Offload, or type a name when it is not there. Picking one clears the typed text. */
+function OrganisationText({ idName, textName, label, id, text, name, errors, type }: LinkedProps & { type: 'CLUB' | 'UNION' | 'INSTITUTION' }): React.JSX.Element {
+  const [linked, setLinked] = useState(Boolean(id))
   return (
-    <>
-      <input type="hidden" name={idName} value={id} />
-      {id ? (
-        <TextField name={`${textName}Shown`} label={label} defaultValue={name} isReadOnly hint="Linked to an organisation on Offload." />
-      ) : (
-        <TextField name={textName} label={label} defaultValue={text} errors={errors} />
-      )}
-    </>
+    <div className="flex flex-col gap-xs">
+      <OrganisationPicker
+        name={idName}
+        label={label}
+        type={type}
+        defaultOption={id ? { id, name, city: null } : undefined}
+        onChange={(option) => setLinked(option !== null)}
+        hint="Search organisations on Offload. If it is not there, type the name below."
+      />
+      {!linked ? <TextField name={textName} label={`${label} (name, if not on Offload)`} defaultValue={text} errors={errors} /> : null}
+    </div>
   )
 }
 
@@ -57,9 +64,9 @@ export function PlayingSection({ data, reference }: { data: EditorData['playing'
           <TextField name="heightCm" label="Height (cm)" type="number" defaultValue={data.heightCm} errors={errors('heightCm')} />
           <TextField name="weightKg" label="Weight (kg)" type="number" defaultValue={data.weightKg} errors={errors('weightKg')} />
         </div>
-        <OrganisationText idName="currentClubId" textName="currentClubText" label="Current club" id={data.currentClubId} text={data.currentClubText} name={data.currentClubName} errors={errors('currentClubText')} />
-        <OrganisationText idName="currentUnionId" textName="currentUnionText" label="Current union" id={data.currentUnionId} text={data.currentUnionText} name={data.currentUnionName} errors={errors('currentUnionText')} />
-        <OrganisationText idName="currentInstitutionId" textName="currentInstitutionText" label="Current college or university" id={data.currentInstitutionId} text={data.currentInstitutionText} name={data.currentInstitutionName} errors={errors('currentInstitutionText')} />
+        <OrganisationText idName="currentClubId" type="CLUB" textName="currentClubText" label="Current club" id={data.currentClubId} text={data.currentClubText} name={data.currentClubName} errors={errors('currentClubText')} />
+        <OrganisationText idName="currentUnionId" type="UNION" textName="currentUnionText" label="Current union" id={data.currentUnionId} text={data.currentUnionText} name={data.currentUnionName} errors={errors('currentUnionText')} />
+        <OrganisationText idName="currentInstitutionId" type="INSTITUTION" textName="currentInstitutionText" label="Current college or university" id={data.currentInstitutionId} text={data.currentInstitutionText} name={data.currentInstitutionName} errors={errors('currentInstitutionText')} />
         <TextField name="contractEndDate" label="Contract end date" type="date" defaultValue={data.contractEndDate} errors={errors('contractEndDate')} />
         <div className="grid gap-md md:grid-cols-2">
           <Select name="rugbyCode" label="League or union" options={rugbyCodes} placeholder="Choose…" defaultValue={data.rugbyCode} />

@@ -56,6 +56,26 @@ export const UPLOAD_URL_SECONDS = 10 * MINUTE
 export const MEDIA_URL_SECONDS = HOUR
 export const FILE_URL_SECONDS = 5 * MINUTE
 
+/** URL segment for each organisation type (03 section 3). */
+export const ORG_ROUTES = {
+  CLUB: 'clubs',
+  UNION: 'unions',
+  INSTITUTION: 'colleges-universities',
+  BRAND: 'brands',
+} as const
+
+export type OrgTypeKey = keyof typeof ORG_ROUTES
+
+export const ORG_TYPE_LABELS: Record<OrgTypeKey, string> = {
+  CLUB: 'Club',
+  UNION: 'Union',
+  INSTITUTION: 'College / University',
+  BRAND: 'Brand',
+}
+
+/** Similarity above which two organisation names count as a possible duplicate. Tuned in the migration rehearsal. */
+export const DUPLICATE_NAME_THRESHOLD = 0.6
+
 export const OUTBOX_MAX_ATTEMPTS = 8
 export const CONSENT_COOKIE_MONTHS = 12
 export const COOKIE_POLICY_VERSION = '1'

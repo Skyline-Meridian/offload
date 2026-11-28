@@ -18,6 +18,13 @@ export const routes = {
   institution: (slug: string) => `/colleges-universities/${slug}`,
   brands: '/brands',
   brand: (slug: string) => `/brands/${slug}`,
+  /** Directory page of a type. */
+  orgDirectory: (type: 'CLUB' | 'UNION' | 'INSTITUTION' | 'BRAND') =>
+    `/${{ CLUB: 'clubs', UNION: 'unions', INSTITUTION: 'colleges-universities', BRAND: 'brands' }[type]}`,
+  /** Public page of an organisation. */
+  orgPage: (type: 'CLUB' | 'UNION' | 'INSTITUTION' | 'BRAND', slug: string) =>
+    `/${{ CLUB: 'clubs', UNION: 'unions', INSTITUTION: 'colleges-universities', BRAND: 'brands' }[type]}/${slug}`,
+  myOrganisation: '/dashboard/organisation',
   about: '/about',
   refundPolicy: '/refund-policy',
   offers: '/offers',

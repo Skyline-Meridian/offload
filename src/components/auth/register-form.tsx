@@ -1,8 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
 
 import { register } from '@/actions/auth'
+import { NewOrganisationFields } from '@/components/organisations/new-organisation-fields'
 import { FormMessage } from '@/components/forms/form-message'
 import { Honeypot } from '@/components/forms/honeypot'
 import { PasswordField } from '@/components/forms/password-field'
@@ -23,17 +25,29 @@ const roleOptions: SelectOption[] = [
 
 type Props = {
   countries: SelectOption[]
+  industries: SelectOption[]
   defaultRole?: string
 }
 
-export function RegisterForm({ countries, defaultRole }: Props): React.JSX.Element {
+export function RegisterForm({ countries, industries, defaultRole }: Props): React.JSX.Element {
   const [state, formAction] = useCaptchaAction(register, 'register')
+  const [role, setRole] = useState(defaultRole ?? '')
   const errors = state.status === 'error' ? state.fieldErrors : undefined
   return (
     <form action={formAction} className="flex flex-col gap-md" noValidate>
       <FormMessage state={state} />
       <Honeypot />
-      <Select name="registerAs" label="Registering as" options={roleOptions} placeholder="Choose…" required defaultValue={defaultRole} errors={errors?.registerAs} />
+      <Select name="registerAs" label="Registering as" options={roleOptions} placeholder="Choose…" required defaultValue={defaultRole} onValueChange={setRole} errors={errors?.registerAs} />
+      {role && role !== 'PLAYER' && ['CLUB', 'UNION', 'INSTITUTION', 'BRAND'].includes(role) ? (
+        <NewOrganisationFields
+          key={role}
+          type={role as 'CLUB' | 'UNION' | 'INSTITUTION' | 'BRAND'}
+          countries={countries}
+          industries={industries}
+          prefix="org"
+          errors={(name) => errors?.[name]}
+        />
+      ) : null}
       <div className="grid gap-md md:grid-cols-2">
         <TextField name="firstName" label="First name" autoComplete="given-name" isRequired errors={errors?.firstName} />
         <TextField name="lastName" label="Last name" autoComplete="family-name" isRequired errors={errors?.lastName} />

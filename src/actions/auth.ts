@@ -4,8 +4,11 @@ import { APIError } from 'better-auth/api'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
+import { z } from 'zod'
+
 import { DomainError } from '@/lib/errors'
 import { formToObject, type FormState } from '@/lib/form-state'
+import { registrationOrganisationSchema } from '@/lib/validation/organisation'
 import { messages } from '@/lib/messages'
 import { routes, safeNextPath } from '@/lib/routes'
 import {
@@ -19,7 +22,8 @@ import { getViewer } from '@/server/dal/viewer'
 import { errorInfo, log } from '@/server/log'
 import { hit } from '@/server/rate-limit'
 import { clientIp, withCaptcha } from '@/server/request'
-import { registerUser } from '@/server/services/auth/register'
+import { registerUser, type RegistrationExtension } from '@/server/services/auth/register'
+import { claimOrganisation, registerOrganisation, type NewOrganisationInput } from '@/server/services/organisations/register'
 
 function fieldErrors(error: { flatten: () => { fieldErrors: Record<string, string[] | undefined> } }): FormState {
   return { status: 'error', fieldErrors: error.flatten().fieldErrors }
@@ -66,6 +70,39 @@ export async function register(_prev: FormState, formData: FormData): Promise<Fo
     return { status: 'error', message: messages.tooManyRequests }
   }
 
+  // Managers also add a new organisation or claim an existing one. Check it before the account exists.
+  let extend: RegistrationExtension | undefined
+  if (parsed.data.registerAs !== 'PLAYER') {
+    const type = parsed.data.registerAs
+    if (raw.orgMode === 'claim') {
+      const organisationId = z.uuid().safeParse(raw.organisationId)
+      if (!organisationId.success) return { status: 'error', fieldErrors: { organisationId: ['Choose an organisation'] } }
+      extend = (tx, userId) => claimOrganisation(tx, userId, organisationId.data)
+    } else {
+      const form = formToObject(formData)
+      const orgParsed = registrationOrganisationSchema(type).safeParse({
+        name: form.orgName,
+        country: form.orgCountry,
+        officialEmail: form.orgOfficialEmail,
+        officialPhone: form.orgOfficialPhone,
+        registrationNumber: form.orgRegistrationNumber,
+        website: form.orgWebsite,
+        industryId: form.orgIndustryId,
+        industryOther: form.orgIndustryOther,
+        institutionKind: form.orgInstitutionKind,
+      })
+      if (!orgParsed.success) {
+        const prefixed: Record<string, string[] | undefined> = {}
+        for (const [key, value] of Object.entries(orgParsed.error.flatten().fieldErrors)) {
+          prefixed[`org${key.charAt(0).toUpperCase()}${key.slice(1)}`] = value
+        }
+        return { status: 'error', fieldErrors: prefixed }
+      }
+      const orgData = orgParsed.data as NewOrganisationInput
+      extend = (tx, userId) => registerOrganisation(tx, userId, { ...orgData, type }).then(() => undefined)
+    }
+  }
+
   try {
     await registerUser(
       {
@@ -79,6 +116,7 @@ export async function register(_prev: FormState, formData: FormData): Promise<Fo
         isNewsletterOptedIn: parsed.data.isNewsletterOptedIn,
       },
       withCaptcha(requestHeaders, parsed.data.captchaToken),
+      extend,
     )
   } catch (error) {
     if (error instanceof DomainError) {

@@ -13,10 +13,12 @@ type Props = {
   placeholder?: string
   defaultValue?: string | readonly string[]
   className?: string
+  /** Called with the chosen value of a single select. */
+  onValueChange?: (value: string) => void
 }
 
 /** A labelled native select. Native controls give the best keyboard and phone behaviour for long lists. */
-export function Select({ name, label, options, errors, hint, multiple, required, placeholder, defaultValue, className }: Props): React.JSX.Element {
+export function Select({ name, label, options, errors, hint, multiple, required, placeholder, defaultValue, className, onValueChange }: Props): React.JSX.Element {
   const id = `field-${name}`
   const invalid = Boolean(errors?.length)
   const describedBy = [hint ? `${id}-hint` : '', invalid ? `${id}-error` : ''].filter(Boolean).join(' ') || undefined
@@ -32,6 +34,7 @@ export function Select({ name, label, options, errors, hint, multiple, required,
         multiple={multiple}
         required={required}
         defaultValue={defaultValue as string | string[] | undefined}
+        onChange={onValueChange ? (event) => onValueChange(event.target.value) : undefined}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
         className={cn(
