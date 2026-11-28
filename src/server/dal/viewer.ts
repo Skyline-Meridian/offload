@@ -5,6 +5,7 @@ import { cache } from 'react'
 
 import type {
   DocumentStatus,
+  MembershipSource,
   MembershipStatus,
   OrganisationStatus,
   OrganisationType,
@@ -32,7 +33,7 @@ export type Viewer = {
   isStaff: boolean
   /** Player: document verified. Manager: active member of a published organisation. Staff: always. */
   isVerified: boolean
-  membership: { id: string; status: MembershipStatus; organisationId: string } | null
+  membership: { id: string; status: MembershipStatus; source: MembershipSource; organisationId: string } | null
   organisation: { id: string; name: string; slug: string; type: OrganisationType; status: OrganisationStatus } | null
   entitlements: { subscription: boolean }
   permissions: ReadonlySet<Permission>
@@ -65,6 +66,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
         select: {
           id: true,
           status: true,
+          source: true,
           organisationId: true,
           organisation: { select: { id: true, name: true, slug: true, type: true, status: true } },
         },
@@ -101,7 +103,7 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
     isStaff,
     isVerified,
     membership: membershipRow
-      ? { id: membershipRow.id, status: membershipRow.status, organisationId: membershipRow.organisationId }
+      ? { id: membershipRow.id, status: membershipRow.status, source: membershipRow.source, organisationId: membershipRow.organisationId }
       : null,
     organisation,
     entitlements: { subscription },

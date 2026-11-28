@@ -9,9 +9,17 @@ import type { EditorData, EditorReference } from '@/components/players/editor/ty
 import { TextField } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { useSection } from '@/hooks/use-section'
+import type { FormState } from '@/lib/form-state'
 
-export function IdentitySection({ data, reference }: { data: EditorData['identity']; reference: EditorReference }): React.JSX.Element {
-  const { state, formAction, errors } = useSection(saveIdentity)
+type Props = {
+  data: EditorData['identity']
+  reference: EditorReference
+  /** Managers use their own action; players use the default. */
+  action?: (prev: FormState, formData: FormData) => Promise<FormState>
+}
+
+export function IdentitySection({ data, reference, action = saveIdentity }: Props): React.JSX.Element {
+  const { state, formAction, errors } = useSection(action)
   return (
     <SectionCard id="identity" title="About you">
       <form action={formAction} className="flex flex-col gap-md" noValidate>
