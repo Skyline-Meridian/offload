@@ -4,21 +4,9 @@ import { DomainError } from '@/lib/errors'
 import { audit } from '@/server/audit'
 import { db, type Tx } from '@/server/db'
 import { notify } from '@/server/notify'
+import { pauseForOrganisation, resumeForOrganisation, syncAfterResume } from '@/server/services/billing/lifecycle'
 import { managersToNotify } from '@/server/services/organisations/members'
 import { storage } from '@/server/storage'
-
-/** Hooks that other modules register to run inside the lifecycle transactions (billing pauses and resumes here). */
-type LifecycleHook = (tx: Tx, organisationId: string) => Promise<void>
-const onUnpublish: LifecycleHook[] = []
-const onRepublish: LifecycleHook[] = []
-
-export function registerUnpublishHook(hook: LifecycleHook): void {
-  onUnpublish.push(hook)
-}
-
-export function registerRepublishHook(hook: LifecycleHook): void {
-  onRepublish.push(hook)
-}
 
 async function load(tx: Tx, organisationId: string) {
   const org = await tx.organisation.findFirst({ where: { id: organisationId, deletedAt: null }, select: { id: true, name: true, status: true, slug: true, type: true } })
@@ -31,18 +19,24 @@ export async function unpublishOrganisation(organisationId: string, reason: stri
     const org = await load(tx, organisationId)
     if (org.status !== 'PUBLISHED') throw new DomainError('bad-state', 'Only a published organisation can be unpublished.')
     await tx.organisation.update({ where: { id: organisationId }, data: { status: 'UNPUBLISHED', statusReason: reason } })
-    for (const hook of onUnpublish) await hook(tx, organisationId)
+    // The Stripe call runs before the commit: if it fails, the organisation stays published.
+    await pauseForOrganisation(tx, organisationId)
     await notify(tx, { userIds: await managersToNotify(tx, organisationId), type: 'organisation.unpublished', linkPath: '/dashboard/organisation', subjectName: org.name })
     await audit(tx, { action: 'organisation.unpublished', subjectType: 'Organisation', subjectId: organisationId, relatedOrgId: organisationId, data: { reason } })
   })
 }
 
 export async function republishOrganisation(organisationId: string): Promise<void> {
+  await republishInTransaction(organisationId)
+  await syncAfterResume(organisationId)
+}
+
+async function republishInTransaction(organisationId: string): Promise<void> {
   await db.$transaction(async (tx) => {
     const org = await load(tx, organisationId)
     if (org.status !== 'UNPUBLISHED') throw new DomainError('bad-state', 'Only an unpublished organisation can be published again.')
     await tx.organisation.update({ where: { id: organisationId }, data: { status: 'PUBLISHED', statusReason: null } })
-    for (const hook of onRepublish) await hook(tx, organisationId)
+    await resumeForOrganisation(tx, organisationId)
     await notify(tx, { userIds: await managersToNotify(tx, organisationId), type: 'organisation.republished', linkPath: '/dashboard/organisation', subjectName: org.name })
     await audit(tx, { action: 'organisation.republished', subjectType: 'Organisation', subjectId: organisationId, relatedOrgId: organisationId })
   })
@@ -52,6 +46,11 @@ export async function republishOrganisation(organisationId: string): Promise<voi
 export async function deleteOrganisation(organisationId: string): Promise<void> {
   const fileIds = await db.$transaction(async (tx) => {
     const org = await load(tx, organisationId)
+    // SUB-8.8: an organisation with a live subscription (even paused, or set to cancel at period end) cannot be deleted.
+    const live = await tx.subscription.findFirst({ where: { organisationId, status: { not: 'ENDED' } }, select: { id: true } })
+    if (live) {
+      throw new DomainError('has-subscription', `This organisation still has a subscription (${live.id}). Cancel it now first.`)
+    }
     const coaches = await tx.coach.findMany({ where: { organisationId }, select: { photoFileId: true } })
     const full = await tx.organisation.findUniqueOrThrow({ where: { id: organisationId }, select: { logoFileId: true, documentFileId: true } })
     const files = [full.logoFileId, full.documentFileId, ...coaches.map((c) => c.photoFileId)].filter((f): f is string => Boolean(f))

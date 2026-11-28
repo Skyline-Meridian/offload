@@ -100,3 +100,11 @@ The development page `/dev/components` shows the primitives (it returns 404 in p
 | `useRealtime` (and `RealtimeProvider`) | One shared WebSocket; events by type; "Reconnecting…" banner |
 | `useSection` | Result and field errors of one editor form |
 | `usePlaceSearch` | Mounts Google's place search the first time a field is used |
+
+### billing/
+
+| Component | For |
+|---|---|
+| `PricingTable` | Active plans with the buy button and the reason when buying is blocked |
+| `SubscriptionPanel` | Plan, status, dates, invoices and the cancel, switch and portal actions |
+| `RefreshWhile` | Refreshes the page until a condition is met (waiting for the Stripe webhook) |
