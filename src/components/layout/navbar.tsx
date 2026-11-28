@@ -8,6 +8,8 @@ import { useState } from 'react'
 
 import { Icon } from '@/components/ui/icon'
 import { LinkButton } from '@/components/ui/button'
+import { MessageBadge } from '@/components/messaging/message-badge'
+import { NotificationBell } from '@/components/notifications/notification-bell'
 import { Container } from '@/components/layout/container'
 import { mainNav, type NavItem } from '@/components/layout/nav-items'
 import { cn } from '@/lib/cn'
@@ -16,6 +18,8 @@ import { routes } from '@/lib/routes'
 type Props = {
   /** Signed-in user's first name, or null when signed out. */
   signedInName: string | null
+  unreadNotifications?: number
+  unreadMessages?: number
 }
 
 const linkClass = 'text-button text-heading hover:text-accent transition-fast py-xs'
@@ -59,7 +63,7 @@ function NavLink({ item, pathname, onNavigate }: { item: NavItem; pathname: stri
   )
 }
 
-export function Navbar({ signedInName }: Props): React.JSX.Element {
+export function Navbar({ signedInName, unreadNotifications = 0, unreadMessages = 0 }: Props): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const close = (): void => setOpen(false)
@@ -91,6 +95,16 @@ export function Navbar({ signedInName }: Props): React.JSX.Element {
             {mainNav.map((item) => (
               <NavLink key={item.label} item={item} pathname={pathname} onNavigate={close} />
             ))}
+            {signedInName ? (
+              <>
+                <li>
+                  <MessageBadge initialUnread={unreadMessages} />
+                </li>
+                <li>
+                  <NotificationBell initialUnread={unreadNotifications} />
+                </li>
+              </>
+            ) : null}
             <li>
               {signedInName ? (
                 <LinkButton href={routes.dashboard} size="sm" onClick={close}>

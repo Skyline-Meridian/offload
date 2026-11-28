@@ -5,6 +5,7 @@ import { Suspense } from 'react'
 import './globals.css'
 
 import { CookieConsentBanner } from '@/components/layout/cookie-consent'
+import { RealtimeProvider } from '@/hooks/use-realtime'
 import { SiteFooter } from '@/app/site-footer'
 import { SiteHeader } from '@/app/site-header'
 import { SITE_NAME } from '@/lib/constants'
@@ -43,13 +44,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }):
       className={`${barlowSemiCondensed.variable} ${barlowCondensed.variable} ${urbanist.variable} ${barlow.variable}`}
     >
       <body className="flex min-h-screen flex-col">
-        <Suspense fallback={<div className="h-3xl" />}>
-          <SiteHeader />
-        </Suspense>
-        <div className="flex-1">{children}</div>
-        <Suspense fallback={null}>
-          <SiteFooter />
-        </Suspense>
+        <RealtimeProvider>
+          <Suspense fallback={<div className="h-3xl" />}>
+            <SiteHeader />
+          </Suspense>
+          <div className="flex-1">{children}</div>
+          <Suspense fallback={null}>
+            <SiteFooter />
+          </Suspense>
+        </RealtimeProvider>
         <CookieConsentBanner />
       </body>
     </html>

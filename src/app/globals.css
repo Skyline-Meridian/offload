@@ -84,11 +84,13 @@
   --size-avatar-lg: 6rem;
   --size-avatar-xl: 16rem;
   --size-control: 3rem;
+  --size-thread: 32rem;
 
   --container-content: 87.5rem;
   --container-narrow: 40rem;
   --container-form: 30rem;
   --container-menu: 14rem;
+  --container-menu-wide: 22rem;
 
   /* Shape */
   --radius-none: 0;
@@ -276,6 +278,34 @@
 
 @utility top-0 {
   top: 0;
+}
+
+@utility min-h-0 {
+  min-height: 0;
+}
+
+@utility min-w-0 {
+  min-width: 0;
+}
+
+@utility bottom-0 {
+  bottom: 0;
+}
+
+@utility min-w-icon-sm {
+  min-width: var(--size-icon-sm);
+}
+
+@utility min-h-thread {
+  min-height: var(--size-thread);
+}
+
+@utility -right-2xs {
+  right: calc(var(--spacing-2xs) * -1);
+}
+
+@utility -top-2xs {
+  top: calc(var(--spacing-2xs) * -1);
 }
 
 @utility inset-0 {

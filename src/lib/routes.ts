@@ -33,7 +33,7 @@ export const routes = {
   offers: '/offers',
   offer: (id: string) => `/offers/${id}`,
   messages: '/messages',
-  notifications: '/notifications',
+  notifications: '/dashboard/notifications',
   pricing: '/pricing',
   contact: '/contact',
   terms: '/terms-and-conditions',

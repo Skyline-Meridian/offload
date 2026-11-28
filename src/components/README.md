@@ -57,3 +57,46 @@ The development page `/dev/components` shows the primitives (it returns 404 in p
 | `useRecaptcha` | reCAPTCHA v3 token (empty without a site key) |
 | `useCaptchaAction` | `useActionState` that adds the token before the action runs |
 | `useUpload` | Upload steps and progress |
+
+## Added since phase 1
+
+### forms/
+
+| Component | For |
+|---|---|
+| `AddressField` (`SingleAddressField`, `FullAddressField`) | Google place search with a plain-text fallback; typing after a pick clears the place id |
+| `RichTextEditor` | Bold, italic, lists and links; the server cleans the HTML again |
+| `OrganisationPicker` | Search published organisations of one type and pick one (hidden id field) |
+
+### shared/
+
+| Component | For |
+|---|---|
+| `InfiniteList` | Loads the next page when the end scrolls into view, with a "Load more" fallback; cursor kept in the address |
+| `MapEmbed` | Address text, and the Google map only after the "maps" cookie category is accepted |
+| `RelativeTime` | "3 hours ago" with the full UK date on hover |
+
+### gates/
+
+`LoginRequired`, `VerificationRequired`, `SubscriptionRequired`: the text and next step when a section is not available.
+
+### players/, organisations/, offers/, applications/
+
+`PlayerCard`, `PlayerDirectory`, `PlayerFilters`, `PlayerProfileView`, badges and the profile editor sections; `OrganisationCard`, `OrganisationDirectory`, `OrganisationFilters`, `OrganisationView` and the organisation editor; `OfferCard`, `OfferView`, `OfferForm`, `ApplyBox`, `ManagerOffers`; `ManagerApplications`, `PlayerApplications`.
+
+### messaging/ and notifications/
+
+| Component | For |
+|---|---|
+| `MessageThread` | Open conversation with optimistic sending, live updates and catch-up after a reconnect |
+| `ConversationList` | Conversations with unread dots, refreshed live |
+| `MessageBadge`, `NotificationBell` | Navbar icons with unread counts that update live |
+| `NotificationList` | Full notification history |
+
+### Hooks added
+
+| Hook | For |
+|---|---|
+| `useRealtime` (and `RealtimeProvider`) | One shared WebSocket; events by type; "Reconnecting…" banner |
+| `useSection` | Result and field errors of one editor form |
+| `usePlaceSearch` | Mounts Google's place search the first time a field is used |
